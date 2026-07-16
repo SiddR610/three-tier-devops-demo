@@ -2,17 +2,11 @@ pipeline {
     agent any
 
     stages {
-        stage('Checkout') {
-            steps {
-                checkout scm
-            }
-        }
-
-        stage('Build and Deploy') {
+        stage('Deploy') {
             steps {
                 sh '''
-                docker compose down || true
-                docker compose up -d --build
+                docker compose -f docker-compose.yml down || true
+                docker compose -f docker-compose.yml up -d --build
                 '''
             }
         }
