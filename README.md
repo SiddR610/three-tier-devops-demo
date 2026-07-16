@@ -1,99 +1,65 @@
-## Compose sample application
-### React application with a NodeJS backend and a MySQL database
+# Example Voting App
 
-Project structure:
-```
-.
-├── backend
-│   ├── Dockerfile
-│   ...
-├── db
-│   └── password.txt
-├── compose.yaml
-├── frontend
-│   ├── ...
-│   └── Dockerfile
-└── README.md
+A simple distributed application running across multiple Docker containers.
+
+## Getting started
+
+Download [Docker Desktop](https://www.docker.com/products/docker-desktop) for Mac or Windows. [Docker Compose](https://docs.docker.com/compose) will be automatically installed. On Linux, make sure you have the latest version of [Compose](https://docs.docker.com/compose/install/).
+
+This solution uses Python, Node.js, .NET, with Redis for messaging and Postgres for storage.
+
+Run in this directory to build and run the app:
+
+```shell
+docker compose up
 ```
 
-[_compose.yaml_](compose.yaml)
-```
-services:
-  backend:
-    build: backend
-    ports:
-      - 80:80
-      - 9229:9229
-      - 9230:9230
-    ...
-  db:
-    # We use a mariadb image which supports both amd64 & arm64 architecture
-    image: mariadb:10.6.4-focal
-    # If you really want to use MySQL, uncomment the following line
-    #image: mysql:8.0.27
-    ...
-  frontend:
-    build: frontend
-    ports:
-    - 3000:3000
-    ...
-```
-The compose file defines an application with three services `frontend`, `backend` and `db`.
-When deploying the application, docker compose maps port 3000 of the frontend service container to port 3000 of the host as specified in the file.
-Make sure port 3000 on the host is not already being in use.
+The `vote` app will be running at [http://localhost:8080](http://localhost:8080), and the `results` will be at [http://localhost:8081](http://localhost:8081).
 
-> ℹ️ **_INFO_**  
-> For compatibility purpose between `AMD64` and `ARM64` architecture, we use a MariaDB as database instead of MySQL.  
-> You still can use the MySQL image by uncommenting the following line in the Compose file   
-> `#image: mysql:8.0.27`
+Alternately, if you want to run it on a [Docker Swarm](https://docs.docker.com/engine/swarm/), first make sure you have a swarm. If you don't, run:
 
-## Deploy with docker compose
-
-```
-$ docker compose up -d
-Creating network "react-express-mysql_default" with the default driver
-Building backend
-Step 1/16 : FROM node:10
- ---> aa6432763c11
-...
-Successfully tagged react-express-mysql_frontend:latest
-WARNING: Image for service frontend was built because it did not already exist. To rebuild this image you must use `docker-compose build` or `docker-compose up --build`.
-Creating react-express-mysql_db_1 ... done
-Creating react-express-mysql_backend_1 ... done
-Creating react-express-mysql_frontend_1 ... done
+```shell
+docker swarm init
 ```
 
-## Expected result
+Once you have your swarm, in this directory run:
 
-Listing containers must show containers running and the port mapping as below:
-```
-$ docker ps
-CONTAINER ID        IMAGE                          COMMAND                  CREATED             STATUS                   PORTS                                                  NAMES
-f3e1183e709e        react-express-mysql_frontend   "docker-entrypoint.s…"   8 minutes ago       Up 8 minutes             0.0.0.0:3000->3000/tcp                                 react-express-mysql_frontend_1
-9422da53da76        react-express-mysql_backend    "docker-entrypoint.s…"   8 minutes ago       Up 8 minutes (healthy)   0.0.0.0:80->80/tcp, 0.0.0.0:9229-9230->9229-9230/tcp   react-express-mysql_backend_1
-a434bce6d2be        mysql:8.0.19                   "docker-entrypoint.s…"   8 minutes ago       Up 8 minutes             3306/tcp, 33060/tcp                                    react-express-mysql_db_1
+```shell
+docker stack deploy --compose-file docker-stack.yml vote
 ```
 
-After the application starts, navigate to `http://localhost:3000` in your web browser.
+## Run the app in Kubernetes
 
-![page](./output.png)
+The folder k8s-specifications contains the YAML specifications of the Voting App's services.
 
+Run the following command to create the deployments and services. Note it will create these resources in your current namespace (`default` if you haven't changed it.)
 
-The backend service container has the port 80 mapped to 80 on the host.
+```shell
+kubectl create -f k8s-specifications/
 ```
-$ curl localhost:80
-{"message":"Hello from MySQL 8.0.19"}
+
+The `vote` web app is then available on port 31000 on each host of the cluster, the `result` web app is available on port 31001.
+
+To remove them, run:
+
+```shell
+kubectl delete -f k8s-specifications/
 ```
 
-Stop and remove the containers
-```
-$ docker compose down
-Stopping react-express-mysql_frontend_1 ... done
-Stopping react-express-mysql_backend_1  ... done
-Stopping react-express-mysql_db_1       ... done
-Removing react-express-mysql_frontend_1 ... done
-Removing react-express-mysql_backend_1  ... done
-Removing react-express-mysql_db_1       ... done
-Removing network react-express-mysql_default
+## Architecture
 
-```
+![Architecture diagram](architecture.excalidraw.png)
+
+* A front-end web app in [Python](/vote) which lets you vote between two options
+* A [Redis](https://hub.docker.com/_/redis/) which collects new votes
+* A [.NET](/worker/) worker which consumes votes and stores them in…
+* A [Postgres](https://hub.docker.com/_/postgres/) database backed by a Docker volume
+* A [Node.js](/result) web app which shows the results of the voting in real time
+
+## Notes
+
+The voting application only accepts one vote per client browser. It does not register additional votes if a vote has already been submitted from a client.
+
+This isn't an example of a properly architected perfectly designed distributed app... it's just a simple
+example of the various types of pieces and languages you might see (queues, persistent data, etc), and how to
+deal with them in Docker at a basic level.
